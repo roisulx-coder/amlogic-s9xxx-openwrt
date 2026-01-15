@@ -248,7 +248,7 @@ on:
         options:
           - ophub
           - angel
-          - yourname
+          - RLXWRT
 
 env:
   TZ: Etc/UTC
