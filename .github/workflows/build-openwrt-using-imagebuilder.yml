@@ -313,6 +313,10 @@ jobs:
         if: ${{ steps.init.outputs.status }} == 'success' && !cancelled()
         run: |
           RELEASES_BRANCH="${{ inputs.releases_branch }}"
+          
+          # Tambahkan baris di bawah ini untuk memasukkan paket Reyre
+          export PACKAGES="luci luci-base luci-mod-admin-full luci-theme-bootstrap luci-app-firewall mwan3 luci-app-mwan3 modemmanager luci-app-modemmanager usbutils kmod-usb-net-rtl8152 kmod-usb-net-asix-ax88179 kmod-usb-net-cdc-ether kmod-usb-net-rndis kmod-usb-serial kmod-usb-serial-option kmod-usb-serial-wwan usb-modeswitch ttyd luci-app-ttyd luci-app-tinyfilemanager kmod-fs-ext4 kmod-fs-vfat kmod-fs-ntfs3 block-mount kmod-usb-storage kmod-usb-dwc3-amlogic ip-full kmod-tun coreutils-base64 bash curl wget-ssl ca-bundle luci-app-openclash luci-app-passwall luci-app-v2ray-server luci-app-pbr luci-app-upnp htop chinadns-ng resolveip ipset iptables-zz-legacy"
+          
           chmod +x ${IMAGEBUILDER_SH}
           ${IMAGEBUILDER_SH} ${RELEASES_BRANCH}
           echo "build_tag=OpenWrt_imagebuilder_${RELEASES_BRANCH/:/_}_$(date +"%Y.%m")" >> ${GITHUB_ENV}
