@@ -259,11 +259,11 @@ env:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    if: ${{ github.event.repository.owner.id }} == ${{ github.event.sender.id }}
+    if: github.event.repository.owner.id == github.event.sender.id
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Initialization environment
         id: init
@@ -272,23 +272,16 @@ jobs:
         run: |
           docker rmi -f $(docker images -q) 2>/dev/null || true
           [[ -n "${AGENT_TOOLSDIRECTORY}" ]] && sudo rm -rf "${AGENT_TOOLSDIRECTORY}"
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android 2>/dev/null
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc 2>/dev/null
           sudo swapoff -a
           sudo rm -f /swapfile /mnt/swapfile
           sudo -E apt-get -y update
-          sudo -E apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
           sudo -E apt-get -y install $(curl -fsSL https://ophub.org/ubuntu2404-make-openwrt-depends)
           sudo -E systemctl daemon-reload
-          #sudo -E apt-get -y full-upgrade
           sudo -E apt-get -y autoremove --purge
           sudo -E apt-get clean
-          sudo sed -i '/NVM_DIR/d;/skel/d' /root/{.bashrc,.profile}
-          sudo rm -rf ~/{.cargo,.dotnet,.rustup}
           sudo -E timedatectl set-timezone "${TZ:-Etc/UTC}"
-          sudo -E ntpdate ntp.ubuntu.com 0.pool.ntp.org || true
-          sudo -E timedatectl set-ntp true
           date -u
-          timedatectl status || true
           echo "status=success" >> ${GITHUB_OUTPUT}
 
       - name: Create simulated physical disk
@@ -312,17 +305,17 @@ jobs:
 
       - name: Build OpenWrt Rootfs [ ${{ inputs.releases_branch }} ]
         id: imagebuilder
-        if: ${{ steps.init.outputs.status }} == 'success' && !cancelled()
+        if: steps.init.outputs.status == 'success' && !cancelled()
         run: |
           RELEASES_BRANCH="${{ inputs.releases_branch }}"
           
-          # Tambahkan baris di bawah ini untuk memasukkan paket Reyre
-          export PACKAGES="luci luci-base luci-mod-admin-full luci-theme-bootstrap luci-app-firewall mwan3 luci-app-mwan3 modemmanager luci-app-modemmanager usbutils kmod-usb-net-rtl8152 kmod-usb-net-asix-ax88179 kmod-usb-net-cdc-ether kmod-usb-net-rndis kmod-usb-serial kmod-usb-serial-option kmod-usb-serial-wwan usb-modeswitch ttyd luci-app-ttyd luci-app-tinyfilemanager kmod-fs-ext4 kmod-fs-vfat kmod-fs-ntfs3 block-mount kmod-usb-storage kmod-usb-dwc3-amlogic ip-full kmod-tun coreutils-base64 bash curl wget-ssl ca-bundle luci-app-openclash luci-app-passwall luci-app-v2ray-server luci-app-pbr luci-app-upnp htop chinadns-ng resolveip ipset iptables-zz-legacy"
+          # Paket Wajib Amlogic ditambahkan di baris ini: kmod-amlogic-fdt-any kmod-fs-btrfs kmod-mmc
+          export PACKAGES="luci luci-base luci-mod-admin-full luci-theme-bootstrap luci-app-firewall mwan3 luci-app-mwan3 modemmanager luci-app-modemmanager usbutils kmod-usb-net-rtl8152 kmod-usb-net-asix-ax88179 kmod-usb-net-cdc-ether kmod-usb-net-rndis kmod-usb-serial kmod-usb-serial-option kmod-usb-serial-wwan usb-modeswitch ttyd luci-app-ttyd luci-app-tinyfilemanager kmod-fs-ext4 kmod-fs-vfat kmod-fs-ntfs3 block-mount kmod-usb-storage kmod-usb-dwc3-amlogic ip-full kmod-tun coreutils-base64 bash curl wget-ssl ca-bundle luci-app-openclash luci-app-passwall luci-app-v2ray-server luci-app-pbr luci-app-upnp htop chinadns-ng resolveip ipset iptables-zz-legacy kmod-amlogic-fdt-any kmod-fs-btrfs kmod-mmc"
           
           chmod +x ${IMAGEBUILDER_SH}
-          ${IMAGEBUILDER_SH} ${RELEASES_BRANCH}
-          echo "build_tag=OpenWrt_imagebuilder_${RELEASES_BRANCH/:/_}_$(date +"%Y.%m")" >> ${GITHUB_ENV}
-          # Add symbolic link
+          ./${IMAGEBUILDER_SH} ${RELEASES_BRANCH}
+          echo "build_tag=OpenWrt_imagebuilder_${RELEASES_BRANCH/:/_}_$(date +"%Y.%m.%d")" >> ${GITHUB_ENV}
+          
           [[ -d "/builder/openwrt" ]] || mkdir -p /builder/openwrt
           ln -sf /builder/openwrt /home/runner/work/_actions/ophub/amlogic-s9xxx-openwrt/main/openwrt
           df -hT ${PWD}
@@ -330,7 +323,7 @@ jobs:
 
       - name: Upload OpenWrt to Release
         uses: ncipollo/release-action@main
-        if: ${{ steps.imagebuilder.outputs.status }} == 'success' && !cancelled()
+        if: steps.imagebuilder.outputs.status == 'success' && !cancelled()
         with:
           tag: ${{ env.build_tag }}
           artifacts: output/*
@@ -341,7 +334,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Packaging OpenWrt
-        if: ${{ steps.imagebuilder.outputs.status }} == 'success' && !cancelled()
+        if: steps.imagebuilder.outputs.status == 'success' && !cancelled()
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
           openwrt_path: output/*rootfs.tar.gz
@@ -355,7 +348,7 @@ jobs:
 
       - name: Upload the packaged OpenWrt
         uses: ncipollo/release-action@main
-        if: ${{ env.PACKAGED_STATUS }} == 'success' && !cancelled()
+        if: env.PACKAGED_STATUS == 'success' && !cancelled()
         with:
           tag: ${{ env.build_tag }}
           artifacts: ${{ env.PACKAGED_OUTPUTPATH }}/*
@@ -365,6 +358,9 @@ jobs:
           makeLatest: true
           token: ${{ secrets.GITHUB_TOKEN }}
           body: |
+            Build OpenWrt for Amlogic S9xxx
+            Board: ${{ inputs.openwrt_board }}
+            Kernel: ${{ inputs.openwrt_kernel }}
             ### OpenWrt Image information
             - Default IP: `192.168.1.1`
             - Default username: `root`
